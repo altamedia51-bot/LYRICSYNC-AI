@@ -141,11 +141,12 @@ Rules:
 7. Your primary task is to align each supplied lyric line to the sung audio vocals.
 8. For every lyric line, determine the exact start timestamp and end timestamp in seconds (float with millisecond precision, e.g. 14.320).
 9. Ensure start >= 0, end > start, and timestamps are in chronological order.
-10. CRITICAL - LONG INSTRUMENTAL INTERLUDES / GUITAR & KEYBOARD SOLOS:
-    - Songs (especially Indonesian pop, rock, dangdut, and ballads) often have 15 to 45 seconds of instrumental melodies (melodi gitar, piano, kendang, synth solo) between Chorus and Verse 2 / Reff (e.g. between 01:30 and 02:50).
-    - During these instrumental sections, THERE IS NO SINGING.
-    - NEVER rush or compress lyrics into instrumental solos.
-    - Accurately track real clock seconds. When vocals resume after the solo, set the start timestamp to the exact second the singer starts singing the next line.
+10. DYNAMIC INSTRUMENTAL BREAKS & VOCAL ONSET DETECTION:
+    - Songs frequently have instrumental intros, solos (guitars, piano, oud, violin, synthesizer), or interludes between verses.
+    - These instrumental breaks have unpredictable lengths (some are 3 seconds, some are 15-25 seconds, etc.).
+    - NEVER guess, assume, or fabricate timestamps during instrumental sections.
+    - Listen closely to the acoustic audio wave. The start timestamp of any lyric line MUST BE SET to the EXACT second the human vocal begins vocalizing that line.
+    - DO NOT place lyrics during instrumental-only periods.
 11. If a supplied line is sung across multiple vocal phrases, time it to encompass the vocal performance naturally.
 12. Return clean structured JSON conforming to the schema.`;
 
@@ -175,11 +176,11 @@ ${includeSections ? '6. You may include section labels (e.g. [Intro], [Verse 1],
 7. Separate lyrics according to natural vocal phrasing, breathing pauses, and musical rhythm.
 8. Subtitle lines should ideally be between 1 and 7 seconds long. Avoid splitting continuous vocal phrases awkwardly.
 9. Support short vocal phrases, ad-libs, and repeated chorus lines (e.g. "Oh", "Yeah", "Ah", "La la la", "يا حبيبي", "آه").
-10. CRITICAL FOR SONGS WITH INSTRUMENTAL INTERLUDES, SOLOS, OR BRIDGES:
-    - Many songs (e.g. Indonesian pop/rock/dangdut/ballads) have long musical interludes/melodies between verses (e.g. 15 to 45 seconds of instruments with no singing).
+10. DYNAMIC INSTRUMENTAL BREAKS & VOCAL ONSET DETECTION:
+    - Many songs have musical interludes, solos, or breaks between verses or chorus.
     - NEVER compress or guess timestamps during instrumental pauses.
-    - If singing stops at a certain minute (e.g. around 01:45 or 02:20) and an instrumental solo plays until vocals resume (e.g. at 02:49), the subsequent lyric segment MUST start exactly when singing resumes (02:49) in the audio.
-    - Accurately track real clock time so verses after instrumental breaks do not drift or begin prematurely.
+    - When singing stops for an instrumental interlude, do not assign lyrics during the music. When the vocals resume, the subsequent lyric segment MUST start at the exact instant singing becomes audible again in the audio.
+    - Accurately track continuous audio playback time so verses after instrumental breaks begin on the precise acoustic onset.
 11. If the song is in Arabic:
     - Preserve Arabic script strictly.
     - Preserve punctuation and diacritics/harakat if clearly audible or standard.
@@ -419,7 +420,7 @@ Rules:
 1. Preserve 100% of the lyric text for each line. Do not alter words.
 2. Determine acoustic start and end timestamps in seconds (float with millisecond precision, e.g. 14.320).
 3. Ensure start >= 0, end > start, and timestamps are in strict chronological order.
-4. CRITICAL FOR INSTRUMENTAL SECTIONS / MELODI SOLOS: If the song has an instrumental intro or long instrumental solo/interlude between verses (e.g. 15-45s of guitar/piano solo without vocals), do NOT place lyrics during the solo. The next lyric line must start ONLY at the exact second singing resumes.
+4. CRITICAL FOR INSTRUMENTAL SECTIONS & SOLOS: If the song has an instrumental intro or musical interlude between verses, DO NOT place lyrics during the music. The next lyric line must start at the EXACT second singing resumes.
 ${mode === 'selected' && typeof targetIndex === 'number' ? `Focus specifically on refining timestamp for item #${targetIndex + 1}: "${segments[targetIndex]?.text}".` : ''}
 ${mode === 'from_index' && typeof targetIndex === 'number' ? `Refine timestamps starting from item #${targetIndex + 1} onwards.` : ''}
 

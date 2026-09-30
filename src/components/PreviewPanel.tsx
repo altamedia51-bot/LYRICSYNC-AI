@@ -20,6 +20,7 @@ interface PreviewPanelProps {
   settings: LyricSettings;
   onUpdateSettings: (newSettings: Partial<LyricSettings>) => void;
   onJumpTo?: (seconds: number) => void;
+  onSnapUpcomingToCurrent?: (id: number) => void;
 }
 
 export const PreviewPanel: React.FC<PreviewPanelProps> = ({
@@ -30,6 +31,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
   settings,
   onUpdateSettings,
   onJumpTo,
+  onSnapUpcomingToCurrent,
 }) => {
   const [showStyleControls, setShowStyleControls] = useState(false);
 
@@ -262,15 +264,27 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({
               >
                 "{upcomingSubtitle.text}"
               </div>
-              {onJumpTo && (
-                <button
-                  type="button"
-                  onClick={() => onJumpTo(upcomingSubtitle.start)}
-                  className="text-[11px] text-purple-400 hover:text-purple-300 underline underline-offset-4 cursor-pointer pt-1"
-                >
-                  Loncat langsung ke lirik ini (▶ {upcomingSubtitle.start.toFixed(1)}s)
-                </button>
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {onSnapUpcomingToCurrent && timeToNext !== null && timeToNext > 0.5 && (
+                  <button
+                    type="button"
+                    onClick={() => onSnapUpcomingToCurrent(upcomingSubtitle.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-900/30 transition-all active:scale-95 border border-purple-400/40 cursor-pointer"
+                    title="Tarik lirik ini ke detik saat ini dan geser lirik setelahnya secara otomatis"
+                  >
+                    <span>⚡ Mulai Lirik #{upcomingSubtitle.id} di Detik Ini & Geser Seterusnya</span>
+                  </button>
+                )}
+                {onJumpTo && (
+                  <button
+                    type="button"
+                    onClick={() => onJumpTo(upcomingSubtitle.start)}
+                    className="text-[11px] text-slate-400 hover:text-purple-300 underline underline-offset-4 cursor-pointer px-1 py-0.5"
+                  >
+                    Loncat ke {upcomingSubtitle.start.toFixed(1)}s
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="text-center text-slate-500 text-xs italic select-none">

@@ -859,6 +859,7 @@ export default function App() {
                   setSettings((prev) => ({ ...prev, ...newSettings }))
                 }
                 onJumpTo={handleSeek}
+                onSnapUpcomingToCurrent={handleSnapStartAndShiftRest}
               />
             </div>
 
