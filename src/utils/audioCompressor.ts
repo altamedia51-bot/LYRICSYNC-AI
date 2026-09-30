@@ -1,4 +1,4 @@
-import lamejs from 'lamejs';
+import { Mp3Encoder } from '@breezystack/lamejs';
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -13,9 +13,9 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /**
- * Optimizes and compresses audio to lightweight mono MP3 (16,000Hz @ 48kbps).
- * This reduces typical 5MB-15MB audio files down to ~0.8MB - 1.5MB,
- * preventing Vercel's strict 4.5MB "413 Request Entity Too Large" limit.
+ * Optimizes and compresses audio to lightweight mono MP3 (16,000Hz @ 32-48kbps).
+ * This safely shrinks 4MB - 20MB audio down to ~0.8MB - 1.4MB,
+ * ensuring payload stays well under Vercel's strict 4.5MB request body limit.
  * Audio playback in browser still plays the original full-quality file.
  */
 export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
@@ -24,9 +24,9 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
   originalSize: number;
   compressedSize: number;
 }> {
-  // If file is already small MP3 (< 2.2MB), base64 is ~2.9MB (well under 4.5MB)
+  // If file is already very small MP3 (< 1.8MB), base64 is ~2.4MB (well under 4.5MB)
   if (
-    fileOrBlob.size < 2.2 * 1024 * 1024 &&
+    fileOrBlob.size < 1.8 * 1024 * 1024 &&
     (fileOrBlob.type === 'audio/mp3' || fileOrBlob.type === 'audio/mpeg')
   ) {
     const base64 = await blobToBase64(fileOrBlob);
@@ -43,6 +43,7 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
 
     if (!AudioCtx) {
+      console.warn('Web Audio API not available in this browser.');
       const base64 = await blobToBase64(fileOrBlob);
       return {
         base64,
@@ -53,16 +54,21 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
     }
 
     const audioCtx = new AudioCtx();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-    // 16,000 Hz Mono is the industry gold standard for speech/vocal AI transcription
-    const targetSampleRate = 16000;
+    // Support both promise and callback styles for Safari/iOS compatibility
+    const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+      audioCtx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+    });
+
+    const duration = audioBuffer.duration;
+    // For longer audio (> 5 mins), use 32kbps to guarantee size stays ~1.2MB
+    const targetBitrate = duration > 300 ? 32 : 48; // kbps
+    const targetSampleRate = 16000; // 16kHz is ideal for vocal speech/lyrics
     const numChannels = 1;
-    const targetBitrate = 48; // kbps
 
     const offlineCtx = new OfflineAudioContext(
       numChannels,
-      Math.ceil(audioBuffer.duration * targetSampleRate),
+      Math.ceil(duration * targetSampleRate),
       targetSampleRate
     );
 
@@ -82,21 +88,8 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
       samples[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
 
-    // Encode to lightweight MP3 using lamejs
-    const Mp3Encoder =
-      (lamejs as any)?.Mp3Encoder ||
-      (lamejs as any)?.default?.Mp3Encoder ||
-      (typeof window !== 'undefined' && (window as any).lamejs?.Mp3Encoder);
-
-    if (typeof Mp3Encoder !== 'function') {
-      throw new Error('Lamejs Mp3Encoder is not a function');
-    }
-
-    const mp3encoder = new Mp3Encoder(
-      numChannels,
-      targetSampleRate,
-      targetBitrate
-    );
+    // Encode to lightweight MP3 using @breezystack/lamejs
+    const mp3encoder = new Mp3Encoder(numChannels, targetSampleRate, targetBitrate);
     const mp3Data: Uint8Array[] = [];
     const chunkSize = 1152;
 
@@ -104,17 +97,21 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
       const chunk = samples.subarray(i, i + chunkSize);
       const mp3buf = mp3encoder.encodeBuffer(chunk);
       if (mp3buf.length > 0) {
-        mp3Data.push(new Uint8Array(mp3buf));
+        mp3Data.push(mp3buf);
       }
     }
 
     const endBuf = mp3encoder.flush();
     if (endBuf.length > 0) {
-      mp3Data.push(new Uint8Array(endBuf));
+      mp3Data.push(endBuf);
     }
 
     const compressedBlob = new Blob(mp3Data as unknown as BlobPart[], { type: 'audio/mp3' });
     const base64 = await blobToBase64(compressedBlob);
+
+    console.log(
+      `[AudioCompressor] Audio compressed from ${(fileOrBlob.size / 1024 / 1024).toFixed(2)} MB to ${(compressedBlob.size / 1024 / 1024).toFixed(2)} MB (${((1 - compressedBlob.size / fileOrBlob.size) * 100).toFixed(0)}% saved for Vercel/AI)`
+    );
 
     return {
       base64,
@@ -123,7 +120,7 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
       compressedSize: compressedBlob.size,
     };
   } catch (err) {
-    console.warn('Audio compression fallback to original file:', err);
+    console.error('Audio compression error:', err);
     const base64 = await blobToBase64(fileOrBlob);
     return {
       base64,
