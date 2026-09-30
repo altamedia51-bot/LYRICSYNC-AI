@@ -539,8 +539,8 @@ export default function App() {
     const delta = currentTime - targetSub.start;
     if (Math.abs(delta) < 0.02) return;
 
-    setSubtitles((prev) =>
-      prev.map((s) => {
+    setSubtitles((prev) => {
+      const shifted = prev.map((s) => {
         if (s.id >= id) {
           const dur = s.end - s.start;
           const newStart = Math.max(0, parseFloat((s.start + delta).toFixed(3)));
@@ -548,11 +548,12 @@ export default function App() {
           return { ...s, start: newStart, end: newEnd };
         }
         return s;
-      })
-    );
+      });
+      return fixSubtitleIssues(shifted, duration);
+    });
 
     const deltaSign = delta >= 0 ? `+${delta.toFixed(2)}s` : `${delta.toFixed(2)}s`;
-    showToast(`✓ Menyetel baris #${id} ke ${formatSRTTime(currentTime)} dan menggeser baris berikutnya (${deltaSign}).`);
+    showToast(`✓ Menyetel baris #${id} ke ${formatSRTTime(currentTime)} dan otomatis menggeser baris seterusnya (${deltaSign}).`);
   };
 
   // Merge with next subtitle
