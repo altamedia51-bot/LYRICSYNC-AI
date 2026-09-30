@@ -1,0 +1,6 @@
+{
+  "name": "LyricSync AI - Music MP3 to SRT Lyric Generator",
+  "description": "Professional music lyric subtitle generator. Transcribe and align song lyrics with millisecond precision, interactive audio waveform editor, and export synchronized SRT subtitles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
