@@ -83,7 +83,16 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
     }
 
     // Encode to lightweight MP3 using lamejs
-    const mp3encoder = new (lamejs as any).Mp3Encoder(
+    const Mp3Encoder =
+      (lamejs as any)?.Mp3Encoder ||
+      (lamejs as any)?.default?.Mp3Encoder ||
+      (typeof window !== 'undefined' && (window as any).lamejs?.Mp3Encoder);
+
+    if (typeof Mp3Encoder !== 'function') {
+      throw new Error('Lamejs Mp3Encoder is not a function');
+    }
+
+    const mp3encoder = new Mp3Encoder(
       numChannels,
       targetSampleRate,
       targetBitrate
