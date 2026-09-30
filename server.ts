@@ -149,8 +149,9 @@ Please transcribe all sung lyrics from this audio with precise musical phrase ti
       text: userPrompt,
     };
 
-    // Candidate models with fallback in case of 503 (high demand) or 429
-    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.5-transcribe'];
+    // Candidate models with fallback in case of quota (429) or high demand (503)
+    // gemini-3.1-flash-lite has high rate limits (1500 RPD) compared to gemini-3.8-flash (20 RPD)
+    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-transcribe'];
     let lastError: any = null;
     let response: any = null;
 
@@ -162,8 +163,8 @@ Please transcribe all sung lyrics from this audio with precise musical phrase ti
           const isTranscribeOnly = modelName.includes('transcribe');
 
           if (isTranscribeOnly) {
-            // gemini-3.5-transcribe does not support systemInstruction ("Developer instruction")
-            const combinedPrompt = `${systemInstruction}\n\n${userPrompt}\n\nRespond ONLY with valid JSON conforming to: {"language": "...", "duration": 0, "segments": [{"id": 1, "start": 0.0, "end": 0.0, "text": "..."}]}`;
+            // gemini-3.5-transcribe does not support systemInstruction or responseMimeType: 'application/json'
+            const combinedPrompt = `${systemInstruction}\n\n${userPrompt}\n\nReturn strictly valid JSON without markdown fences conforming to:\n{"language": "string", "duration": 0, "segments": [{"id": 1, "start": 0.0, "end": 0.0, "text": "lyric line"}]}`;
             response = await ai.models.generateContent({
               model: modelName,
               contents: {
@@ -171,11 +172,11 @@ Please transcribe all sung lyrics from this audio with precise musical phrase ti
               },
               config: {
                 temperature: 0.2,
-                responseMimeType: 'application/json',
+                // Do NOT set responseMimeType for gemini-3.5-transcribe
               },
             });
           } else {
-            // gemini-3.8-flash and gemini-flash-latest support systemInstruction and responseSchema
+            // gemini-3.1-flash-lite, gemini-flash-latest, and gemini-3.8-flash support systemInstruction and responseSchema
             response = await ai.models.generateContent({
               model: modelName,
               contents: {
@@ -318,6 +319,21 @@ Please transcribe all sung lyrics from this audio with precise musical phrase ti
       }
     } catch (_) {}
 
+    const isQuotaExceeded =
+      userMsg.includes('429') ||
+      userMsg.includes('quota') ||
+      userMsg.includes('RESOURCE_EXHAUSTED') ||
+      err?.status === 429;
+
+    if (isQuotaExceeded) {
+      userMsg = 'Kuota harian Gemini API untuk server ini telah habis (429 Quota Exceeded). Silakan masukkan API Key Gemini Anda sendiri (Gratis di aistudio.google.com) melalui tombol "Kunci API" di kanan atas agar dapat langsung digunakan.';
+      return res.status(429).json({
+        error: userMsg,
+        code: 'QUOTA_EXCEEDED',
+        details: err?.message
+      });
+    }
+
     if (userMsg.includes('503') || userMsg.includes('high demand') || userMsg.includes('UNAVAILABLE')) {
       userMsg = 'Server Gemini sedang mengalami lonjakan trafik sementara (503 High Demand). Silakan klik "Coba Lagi".';
     }
@@ -384,7 +400,7 @@ Return structured JSON with the exact same segments and text, but with refreshed
       },
     };
 
-    const candidateModels = ['gemini-3.8-flash', 'gemini-flash-latest'];
+    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
     let response: any = null;
     let lastError: any = null;
 
@@ -448,7 +464,28 @@ Return structured JSON with the exact same segments and text, but with refreshed
     return res.json({ segments: updatedSegments });
   } catch (err: any) {
     console.error('Error in /api/resync:', err);
-    return res.status(500).json({ error: err.message || 'Failed to re-sync timestamps.' });
+    let userMsg = err.message || 'Failed to re-sync timestamps.';
+    try {
+      if (userMsg.startsWith('{') && userMsg.endsWith('}')) {
+        const parsed = JSON.parse(userMsg);
+        if (parsed?.error?.message) userMsg = parsed.error.message;
+      }
+    } catch (_) {}
+
+    const isQuotaExceeded =
+      userMsg.includes('429') ||
+      userMsg.includes('quota') ||
+      userMsg.includes('RESOURCE_EXHAUSTED') ||
+      err?.status === 429;
+
+    if (isQuotaExceeded) {
+      return res.status(429).json({
+        error: 'Kuota Gemini API habis (429 Quota Exceeded). Masukkan API Key Anda sendiri di tombol "Kunci API" di kanan atas.',
+        code: 'QUOTA_EXCEEDED'
+      });
+    }
+
+    return res.status(500).json({ error: userMsg });
   }
 });
 

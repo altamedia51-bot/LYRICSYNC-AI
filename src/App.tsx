@@ -8,6 +8,7 @@ import {
   fixSubtitleIssues 
 } from './utils/srt';
 import { DEMO_TRACKS, generateDemoAudioWav } from './utils/demoData';
+import { compressAudioForAI } from './utils/audioCompressor';
 import { Header } from './components/Header';
 import { UploadZone } from './components/UploadZone';
 import { AudioPlayer } from './components/AudioPlayer';
@@ -20,7 +21,7 @@ import { ImportSRTModal } from './components/ImportSRTModal';
 import { SplitModal } from './components/SplitModal';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { AlertCircle, CheckCircle2, Music, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Music, Sparkles, KeyRound } from 'lucide-react';
 
 const DEFAULT_SETTINGS: LyricSettings = {
   includeSections: false,
@@ -255,7 +256,7 @@ export default function App() {
     setProcessingMode(options.customLyrics ? 'align' : 'transcribe');
 
     try {
-      const base64Audio = await fileToBase64(file);
+      const { base64: base64Audio, mimeType: audioMime } = await compressAudioForAI(file);
 
       const res = await fetch('/api/transcribe', {
         method: 'POST',
@@ -265,7 +266,7 @@ export default function App() {
         },
         body: JSON.stringify({
           audioData: base64Audio,
-          mimeType: file.type || 'audio/mp3',
+          mimeType: audioMime,
           filename: file.name,
           songTitle: cleanTitle,
           duration: audioRef.current?.duration || undefined,
@@ -275,7 +276,19 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || rawText.includes('Entity Too Large')) {
+          throw new Error('Ukuran file audio melebihi batas request Vercel (4.5 MB). Sistem telah mengoptimalkan audio, silakan coba unggah kembali.');
+        }
+        if (res.status === 504 || rawText.includes('timed out') || rawText.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+          throw new Error('Serverless function timeout di Vercel (melebihi batas durasi). Coba lagu dengan durasi lebih pendek atau gunakan API Key sendiri.');
+        }
+        throw new Error(rawText || `Server error (${res.status})`);
+      }
 
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Failed to analyze song.');
@@ -298,7 +311,9 @@ export default function App() {
         }
       } catch (_) {}
 
-      if (cleanMsg.includes('503') || cleanMsg.includes('high demand') || cleanMsg.includes('UNAVAILABLE')) {
+      if (cleanMsg.includes('429') || cleanMsg.includes('quota') || cleanMsg.includes('RESOURCE_EXHAUSTED')) {
+        cleanMsg = 'Batas kuota harian Gemini API gratis untuk server ini telah habis (429 Quota Exceeded). Silakan masukkan API Key Gemini Anda sendiri (Gratis di aistudio.google.com) melalui tombol "Kunci API" di atas.';
+      } else if (cleanMsg.includes('503') || cleanMsg.includes('high demand') || cleanMsg.includes('UNAVAILABLE')) {
         cleanMsg = 'Server Gemini sedang mengalami lonjakan trafik sementara (503 High Demand). Silakan klik "Coba Analisis AI Lagi" di bawah untuk mencoba kembali.';
       }
 
@@ -604,7 +619,7 @@ export default function App() {
 
     setIsResyncing(true);
     try {
-      const base64Audio = await fileToBase64(audioFile);
+      const { base64: base64Audio, mimeType: audioMime } = await compressAudioForAI(audioFile);
       const res = await fetch('/api/resync', {
         method: 'POST',
         headers: {
@@ -613,7 +628,7 @@ export default function App() {
         },
         body: JSON.stringify({
           audioData: base64Audio,
-          mimeType: audioFile.type || 'audio/mp3',
+          mimeType: audioMime,
           segments: subtitles,
           mode,
           targetIndex,
@@ -621,7 +636,17 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (res.status === 413 || rawText.includes('Entity Too Large')) {
+          throw new Error('Ukuran file audio melebihi batas request Vercel (4.5 MB).');
+        }
+        throw new Error(rawText || `Server error (${res.status})`);
+      }
+
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Re-sync failed.');
       }
@@ -724,6 +749,16 @@ export default function App() {
               <span>{bannerError}</span>
             </div>
             <div className="flex items-center gap-2">
+              {(bannerError.includes('kuota') || bannerError.includes('quota') || bannerError.includes('429')) && (
+                <button
+                  type="button"
+                  onClick={() => setIsApiKeyModalOpen(true)}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all shadow flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Atur Kunci API (Gratis)</span>
+                </button>
+              )}
               {audioFile && (
                 <button
                   type="button"
