@@ -879,6 +879,7 @@ export default function App() {
                 onOpenPasteLyrics={() => setShowPasteLyricsInline(true)}
                 isAudioLoaded={Boolean(audioUrl)}
                 onSnapStartAndShiftRest={handleSnapStartAndShiftRest}
+                onApplyGlobalOffset={handleApplyGlobalOffset}
               />
             </div>
           </div>

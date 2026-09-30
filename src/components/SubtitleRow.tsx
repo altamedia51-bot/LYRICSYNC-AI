@@ -184,20 +184,20 @@ export const SubtitleRow: React.FC<SubtitleRowProps> = ({
                 <button
                   type="button"
                   onClick={() => onSetStartToCurrent(subtitle.id)}
-                  className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 hover:underline"
-                  title="Set Start ke posisi pemutaran audio saat ini"
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1 transition-colors"
+                  title="Set waktu Start baris ini ke posisi audio saat ini"
                 >
-                  <Target className="w-2.5 h-2.5" />
+                  <Target className="w-2.5 h-2.5 text-purple-400" />
                   <span>Set Saat Ini</span>
                 </button>
                 {onSnapStartAndShiftRest && (
                   <button
                     type="button"
                     onClick={() => onSnapStartAndShiftRest(subtitle.id)}
-                    className="text-[10px] text-amber-400 hover:text-amber-300 font-medium hover:underline"
-                    title="Set baris ini ke audio saat ini DAN geser semua baris lirik berikutnya (cocok setelah jeda instrumen)"
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 transition-colors font-medium"
+                    title="Set baris ini ke audio saat ini DAN otomatis geser semua baris lirik berikutnya (sangat cocok jika ada intro/solo musik)"
                   >
-                    & Geser Seterusnya
+                    <span>📍 & Geser Seterusnya</span>
                   </button>
                 )}
               </div>

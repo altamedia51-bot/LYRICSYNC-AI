@@ -149,9 +149,8 @@ Please transcribe all sung lyrics from this audio with precise musical phrase ti
       text: userPrompt,
     };
 
-    // Candidate models with fallback in case of quota (429) or high demand (503)
-    // gemini-3.1-flash-lite has high rate limits (1500 RPD) compared to gemini-3.8-flash (20 RPD)
-    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.5-transcribe'];
+    // Candidate models with healthy quotas (gemini-3.8-flash removed due to quota exhaustion)
+    const candidateModels = ['gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let lastError: any = null;
     let response: any = null;
 
@@ -377,21 +376,28 @@ app.post('/api/resync', async (req, res) => {
       },
     });
 
-    const segmentsTextList = segments.map((s, idx) => `${idx + 1}. [approx ${s.start}s - ${s.end}s]: ${s.text}`).join('\n');
+    const segmentsTextList = segments.map((s, idx) => 
+      mode === 'selected' && idx === targetIndex
+        ? `Line ${idx + 1} (id: ${s.id}) [RE-SYNC TARGET]: "${s.text}"`
+        : `Line ${idx + 1} (id: ${s.id}): "${s.text}"`
+    ).join('\n');
 
-    const prompt = `You are an audio timing re-synchronization specialist.
-We have an existing set of lyrics that the user has verified.
-DO NOT change, add, or delete any words in the lyric text.
-Your ONLY job is to listen closely to the singing in the audio track and adjust start and end timestamps for the requested segment(s) to match the vocals with millisecond precision.
+    const prompt = `You are an expert audio vocal timing synchronizer.
+The current subtitle timestamps in the user's project are out of sync.
+DO NOT copy or reuse previous timing estimates. You must listen to the provided audio track from the beginning (0.000s) to identify the exact moments the singer articulates each lyric phrase.
 
-Re-sync mode: ${mode || 'all'}.
+Rules:
+1. Preserve 100% of the lyric text for each line. Do not alter words.
+2. Determine acoustic start and end timestamps in seconds (float with millisecond precision, e.g. 14.320).
+3. Ensure start >= 0, end > start, and timestamps are in strict chronological order.
+4. CRITICAL FOR INSTRUMENTAL SECTIONS / INTROS: If the song starts with an instrumental intro or has an instrumental solo between verses, the lyrics must ONLY begin when vocals are clearly sung. Do not place lyrics during instrumental pauses.
 ${mode === 'selected' && typeof targetIndex === 'number' ? `Focus specifically on refining timestamp for item #${targetIndex + 1}: "${segments[targetIndex]?.text}".` : ''}
 ${mode === 'from_index' && typeof targetIndex === 'number' ? `Refine timestamps starting from item #${targetIndex + 1} onwards.` : ''}
 
-Original Segments:
+AUTHORITATIVE LYRIC LINES:
 ${segmentsTextList}
 
-Return structured JSON with the exact same segments and text, but with refreshed, perfectly synchronized "start" and "end" timestamps in seconds.`;
+Return structured JSON conforming to the schema with exact acoustic timestamps.`;
 
     const audioPart = {
       inlineData: {
@@ -400,7 +406,8 @@ Return structured JSON with the exact same segments and text, but with refreshed
       },
     };
 
-    const candidateModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+    // gemini-flash-latest has superior temporal audio resolution for synchronization
+    const candidateModels = ['gemini-flash-latest', 'gemini-3.1-flash-lite'];
     let response: any = null;
     let lastError: any = null;
 

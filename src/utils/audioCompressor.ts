@@ -63,7 +63,8 @@ export async function compressAudioForAI(fileOrBlob: Blob): Promise<{
     const duration = audioBuffer.duration;
     // For longer audio (> 5 mins), use 32kbps to guarantee size stays ~1.2MB
     const targetBitrate = duration > 300 ? 32 : 48; // kbps
-    const targetSampleRate = 16000; // 16kHz is ideal for vocal speech/lyrics
+    // Use standard 44.1kHz (MPEG-1 Layer 3) to ensure 100% clock synchronization with original music playback
+    const targetSampleRate = 44100;
     const numChannels = 1;
 
     const offlineCtx = new OfflineAudioContext(

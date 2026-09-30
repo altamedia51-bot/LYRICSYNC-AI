@@ -11,7 +11,8 @@ import {
   AlertTriangle, 
   Wrench, 
   Split, 
-  X 
+  X,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface SubtitleEditorProps {
@@ -34,6 +35,7 @@ interface SubtitleEditorProps {
   onOpenPasteLyrics?: () => void;
   isAudioLoaded?: boolean;
   onSnapStartAndShiftRest?: (id: number) => void;
+  onApplyGlobalOffset?: (deltaSeconds: number, fromSubtitleId?: number) => void;
 }
 
 export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({
@@ -56,6 +58,7 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({
   onOpenPasteLyrics,
   isAudioLoaded,
   onSnapStartAndShiftRest,
+  onApplyGlobalOffset,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
@@ -256,6 +259,70 @@ export const SubtitleEditor: React.FC<SubtitleEditorProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Quick Shift / Nudge Bar */}
+        {onApplyGlobalOffset && subtitles.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#252A31]/70 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-400">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-purple-400" />
+              <span className="font-semibold text-slate-200">Geser Cepat (Nudge):</span>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">Koreksi keterlambatan atau percepatan vokal</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 uppercase font-bold mr-0.5">Mundur:</span>
+              <button
+                type="button"
+                onClick={() => onApplyGlobalOffset(-1.0)}
+                className="px-2 py-0.5 rounded bg-[#181D24] hover:bg-purple-600/30 text-slate-200 hover:text-purple-200 border border-[#252A31] text-[11px] font-mono transition-colors"
+                title="Mundurkan semua subtitle 1.0 detik"
+              >
+                -1.0s
+              </button>
+              <button
+                type="button"
+                onClick={() => onApplyGlobalOffset(-0.5)}
+                className="px-2 py-0.5 rounded bg-[#181D24] hover:bg-purple-600/30 text-slate-200 hover:text-purple-200 border border-[#252A31] text-[11px] font-mono transition-colors"
+                title="Mundurkan semua subtitle 0.5 detik"
+              >
+                -0.5s
+              </button>
+              <button
+                type="button"
+                onClick={() => onApplyGlobalOffset(-0.2)}
+                className="px-1.5 py-0.5 rounded bg-[#181D24] hover:bg-purple-600/30 text-slate-200 hover:text-purple-200 border border-[#252A31] text-[11px] font-mono transition-colors"
+                title="Mundurkan semua subtitle 0.2 detik"
+              >
+                -0.2s
+              </button>
+
+              <span className="text-[10px] text-slate-400 uppercase font-bold ml-1 mr-0.5">Maju:</span>
+              <button
+                type="button"
+                onClick={() => onApplyGlobalOffset(0.2)}
+                className="px-1.5 py-0.5 rounded bg-[#181D24] hover:bg-purple-600/30 text-slate-200 hover:text-purple-200 border border-[#252A31] text-[11px] font-mono transition-colors"
+                title="Majukan semua subtitle 0.2 detik"
+              >
+                +0.2s
+              </button>
+              <button
+                type="button"
+                onClick={() => onApplyGlobalOffset(0.5)}
+                className="px-2 py-0.5 rounded bg-[#181D24] hover:bg-purple-600/30 text-slate-200 hover:text-purple-200 border border-[#252A31] text-[11px] font-mono transition-colors"
+                title="Majukan semua subtitle 0.5 detik"
+              >
+                +0.5s
+              </button>
+              <button
+                type="button"
+                onClick={() => onApplyGlobalOffset(1.0)}
+                className="px-2 py-0.5 rounded bg-[#181D24] hover:bg-purple-600/30 text-slate-200 hover:text-purple-200 border border-[#252A31] text-[11px] font-mono transition-colors"
+                title="Majukan semua subtitle 1.0 detik"
+              >
+                +1.0s
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Quality Check Status Bar */}
         <div className="pt-1 border-t border-[#252A31]/50">
