@@ -138,13 +138,14 @@ export default function App() {
     }, 3500);
   }, []);
 
-  // Compute Active Subtitle
+  // Compute Active Subtitle (ensuring latest started segment takes precedence if any overlaps exist)
   const activeSubtitle = useMemo(() => {
-    return (
-      subtitles.find(
-        (sub) => currentTime >= sub.start && currentTime <= sub.end
-      ) || null
+    const matching = subtitles.filter(
+      (sub) => currentTime >= sub.start && currentTime <= sub.end
     );
+    if (matching.length === 0) return null;
+    if (matching.length === 1) return matching[0];
+    return matching.sort((a, b) => b.start - a.start)[0];
   }, [subtitles, currentTime]);
 
   // Compute Quality Validation
@@ -295,9 +296,10 @@ export default function App() {
       }
 
       if (Array.isArray(data.segments) && data.segments.length > 0) {
-        setSubtitles(data.segments);
+        const cleaned = fixSubtitleIssues(data.segments, audioRef.current?.duration || duration);
+        setSubtitles(cleaned);
         if (data.title) setSongTitle(data.title);
-        showToast(`✓ Berhasil membuat ${data.segments.length} baris subtitle tersinkronisasi.`);
+        showToast(`✓ Berhasil membuat ${cleaned.length} baris subtitle tersinkronisasi.`);
       } else {
         throw new Error('AI analysis completed without identifying distinct vocal phrases.');
       }
@@ -652,7 +654,8 @@ export default function App() {
       }
 
       if (Array.isArray(data.segments)) {
-        setSubtitles(data.segments);
+        const cleaned = fixSubtitleIssues(data.segments, audioRef.current?.duration || duration);
+        setSubtitles(cleaned);
         showToast('✓ Successfully re-synchronized timestamps with vocals.');
       }
     } catch (err: any) {
@@ -665,11 +668,12 @@ export default function App() {
 
   // Import SRT
   const handleImportSRT = (imported: SubtitleSegment[]) => {
-    setSubtitles(imported);
+    const cleaned = fixSubtitleIssues(imported, audioRef.current?.duration || duration);
+    setSubtitles(cleaned);
     if (!songTitle) {
       setSongTitle('Imported Subtitles');
     }
-    showToast(`Imported ${imported.length} subtitles into editor.`);
+    showToast(`Imported ${cleaned.length} subtitles into editor.`);
   };
 
   // Export SRT

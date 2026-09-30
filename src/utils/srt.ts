@@ -187,7 +187,7 @@ export function validateSubtitles(
 }
 
 /**
- * Automatically resolve common subtitle timing conflicts
+ * Automatically resolve common subtitle timing conflicts and eliminate overlaps
  */
 export function fixSubtitleIssues(
   subtitles: SubtitleSegment[],
@@ -195,32 +195,33 @@ export function fixSubtitleIssues(
 ): SubtitleSegment[] {
   if (subtitles.length === 0) return [];
 
-  // Filter out empty text and sort by start
-  let cleaned = subtitles
+  // Filter out empty text and sort chronologically by start time
+  const cleaned = subtitles
     .filter((s) => s.text && s.text.trim().length > 0)
     .sort((a, b) => a.start - b.start);
 
   const fixed: SubtitleSegment[] = [];
 
   for (let i = 0; i < cleaned.length; i++) {
-    const item = cleaned[i];
-    let start = Math.max(0, item.start);
-    let end = item.end;
+    const item = { ...cleaned[i] };
+    let start = Math.max(0, Number(item.start) || 0);
+    let end = Number(item.end) || (start + 2.5);
 
-    // Ensure end > start
+    // Ensure minimum duration of 0.6s and end > start
     if (end <= start) {
-      end = start + 2.5;
+      end = start + 2.0;
     }
 
     // Fix overlap with previous item
     if (fixed.length > 0) {
       const prev = fixed[fixed.length - 1];
-      if (start < prev.end) {
-        // Adjust start or prev.end
-        if (start >= prev.start + 0.5) {
-          prev.end = start;
+      if (prev.end > start) {
+        // Option A: If previous line had enough duration, clamp its end before this line starts
+        if (start >= prev.start + 0.8) {
+          prev.end = parseFloat(Math.max(prev.start + 0.5, start - 0.05).toFixed(3));
         } else {
-          start = prev.end;
+          // Option B: If previous line would become too short, shift current line start after previous end
+          start = parseFloat((prev.end + 0.05).toFixed(3));
           end = Math.max(start + 1.5, end);
         }
       }

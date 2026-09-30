@@ -38,6 +38,61 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+/**
+ * Sanitizes, sorts chronologically, and strictly clamps overlapping segments
+ */
+function cleanAndClampSegments(
+  rawSegments: any[],
+  audioMaxDuration = 3600,
+  stripSections = false
+) {
+  const filtered = rawSegments
+    .map((seg: any) => {
+      let start = Math.max(0, Number(seg.start) || 0);
+      let end = Number(seg.end) || (start + 2.5);
+      if (end <= start) end = start + 2.0;
+      if (audioMaxDuration > 0 && end > audioMaxDuration) end = audioMaxDuration;
+
+      let text = String(seg.text || '').trim();
+      if (stripSections) {
+        text = text.replace(/^\[.*?\]\s*/g, '').replace(/\s*\[.*?\]$/g, '').trim();
+      }
+      return {
+        id: seg.id || 0,
+        start: parseFloat(start.toFixed(3)),
+        end: parseFloat(end.toFixed(3)),
+        text,
+        section: seg.section || undefined,
+      };
+    })
+    .filter((seg) => seg.text.length > 0)
+    .sort((a, b) => a.start - b.start);
+
+  // Eliminate overlaps strictly so previous line ends before next line starts
+  for (let i = 0; i < filtered.length - 1; i++) {
+    const curr = filtered[i];
+    const next = filtered[i + 1];
+    if (curr.end > next.start) {
+      if (next.start >= curr.start + 0.8) {
+        // Clamp current end before next line starts (with 50ms gap)
+        curr.end = parseFloat(Math.max(curr.start + 0.5, next.start - 0.05).toFixed(3));
+      } else {
+        // Shift next start after current end
+        next.start = parseFloat((curr.end + 0.05).toFixed(3));
+        next.end = Math.max(next.start + 1.5, next.end);
+      }
+    }
+  }
+
+  // Final re-indexing
+  return filtered.map((s, idx) => ({
+    ...s,
+    id: idx + 1,
+    start: parseFloat(s.start.toFixed(3)),
+    end: parseFloat(s.end.toFixed(3)),
+  }));
+}
+
 // Transcription endpoint
 app.post('/api/transcribe', async (req, res) => {
   try {
@@ -259,43 +314,13 @@ Please transcribe all sung lyrics from this audio with precise musical phrase ti
       }
     }
 
-    // Post-process and sanitize segments
-    let segments = Array.isArray(parsedResult.segments) ? parsedResult.segments : [];
-    
-    // Sort chronologically
-    segments.sort((a: any, b: any) => (Number(a.start) || 0) - (Number(b.start) || 0));
-
-    // Sanitize timestamps and sequential numbering
-    const audioMaxDuration = typeof duration === 'number' && duration > 0 ? duration : 3600;
-    const sanitizedSegments = segments.map((seg: any, idx: number) => {
-      let start = Math.max(0, Number(seg.start) || 0);
-      let end = Number(seg.end) || (start + 3.0);
-      if (end <= start) {
-        end = start + 2.5;
-      }
-      if (end > audioMaxDuration + 5) {
-        end = audioMaxDuration;
-      }
-
-      let text = String(seg.text || '').trim();
-      // If includeSections is false, strip bracketed sections like [Verse] or [Instrumental]
-      if (!includeSections) {
-        text = text.replace(/^\[.*?\]\s*/g, '').replace(/\s*\[.*?\]$/g, '').trim();
-      }
-
-      return {
-        id: idx + 1,
-        start: parseFloat(start.toFixed(3)),
-        end: parseFloat(end.toFixed(3)),
-        text,
-        section: seg.section || undefined
-      };
-    }).filter((seg: any) => seg.text.length > 0);
-
-    // Re-index cleanly
-    sanitizedSegments.forEach((seg: any, idx: number) => {
-      seg.id = idx + 1;
-    });
+    // Post-process, sanitize, and strictly clamp overlaps
+    const rawSegments = Array.isArray(parsedResult.segments) ? parsedResult.segments : [];
+    const sanitizedSegments = cleanAndClampSegments(
+      rawSegments,
+      typeof duration === 'number' && duration > 0 ? duration : 3600,
+      !includeSections
+    );
 
     return res.json({
       title: parsedResult.title || songTitle || filename?.replace(/\.[^/.]+$/, '') || 'Untitled Track',
@@ -468,7 +493,13 @@ Return structured JSON conforming to the schema with exact acoustic timestamps.`
       return orig;
     });
 
-    return res.json({ segments: updatedSegments });
+    const clampedSegments = cleanAndClampSegments(
+      updatedSegments,
+      typeof duration === 'number' && duration > 0 ? duration : 3600,
+      false
+    );
+
+    return res.json({ segments: clampedSegments });
   } catch (err: any) {
     console.error('Error in /api/resync:', err);
     let userMsg = err.message || 'Failed to re-sync timestamps.';
